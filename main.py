@@ -17,8 +17,8 @@ import math
 train_datagen = ImageDataGenerator(rescale=1. / 255.)
 validation_datagen = ImageDataGenerator(rescale=1. / 255.)
 
-train_dir = os.path.join('C:/Users/USER/dataset/noise/')
-validation_dir = os.path.join('C:/Users/USER/dataset/train/')
+train_dir = os.path.join('C:/Users/qwer1/dataset/noise/') # 201202 파일 수를 batch size의 배수로 변경
+validation_dir = os.path.join('C:/Users/qwer1/dataset/train/')
 
 # print(train_dir, validation_dir)
 
@@ -36,60 +36,28 @@ print(len(train_generator), len(validation_generator))
 K = 4
 
 input_tensor = Input(shape=(480, 640, 1), dtype='float32', name='input')
+output_tensor = Input(shape=(480, 640, 1), dtype='float32', name='output')
 
-
-def conv1_layer(x):
-    shortcut = x
-
-    x = Conv2D(8, (3, 3), strides=(1, 1), padding = 'SAME')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Conv2D(16, (3, 3), strides=(1, 1), padding = 'SAME')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = ZeroPadding2D(padding=(1, 1))(x)
-
-    x = Conv2D(32, (3, 3), strides=(1, 1), padding = 'SAME')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Conv2D(64, (3, 3), strides=(1, 1), padding = 'SAME')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Conv2D(128, (3, 3), strides=(1, 1))(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    #print(x.shape)
-    print(shortcut.shape)
-
-    tf.reshape(shortcut, (480, 640, 128), name=None)
-
-    x = Add()([x, shortcut])
-    x = Activation('relu')(x)
-
-    return x
+model = Sequential()
 
 def conv_layers(x):
     shortcut = x
-    model = Sequential()
 
     # 1st convolution layer
-    model.add(Conv2D(16, (3, 3)  # 16 is number of filters and (3, 3) is the size of the filter.
+    model.add(Conv2D(16, (3, 3)
                      , padding='same', input_shape=(480, 640, 1)))
     model.add(Activation('relu'))
     model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
 
     # 2nd convolution layer
-    model.add(Conv2D(2, (3, 3), padding='same'))  # apply 2 filters sized of (3x3)
+    model.add(Conv2D(2, (3, 3), padding='same'))
     model.add(Activation('relu'))
     model.add(MaxPooling2D(pool_size=(2, 2), padding='same'))
 
     # here compressed version
 
     # 3rd convolution layer
-    model.add(Conv2D(2, (3, 3), padding='same'))  # apply 2 filters sized of (3x3)
+    model.add(Conv2D(2, (3, 3), padding='same'))
     model.add(Activation('relu'))
     model.add(UpSampling2D((2, 2)))
 
@@ -101,7 +69,7 @@ def conv_layers(x):
     model.add(Conv2D(1, (3, 3), padding='same'))
     model.add(Activation('sigmoid'))
 
-    tf.reshape(shortcut, (480, 640, 128), name=None)
+    #tf.reshape(shortcut, (480, 640, 128), name=None)
     x = Add()([x, shortcut])
     x = Activation('relu')(x)
 
@@ -118,39 +86,63 @@ def get_mse(original, x, height, width):
     return total / (width * height * 3)
 
 ########################################################################################3
-x = conv_layers(input_tensor)
 
-output_tensor = (480, 640, 128)
+#resnet5 = Model(input_tensor, output_tensor, name='ResNet5')
 
-resnet5 = Model(input_tensor, output_tensor, name='ResNet5')
-
+'''
 #########################
 ######reducing error######
 from tensorflow.python.keras.backend import eager_learning_phase_scope
+import tensorflow as K
 
 f = K.function([x.model.layers[0].input], [x.model.output])
 
 # Run the function for the number of mc_samples with learning_phase enabled
 with eager_learning_phase_scope(value=1):  # 0=test, 1=train
-    Yt_hat = np.array([f((x))[0] for _ in range(train_datagen)])
-
+    Yt_hat = np.array([f((x))[0] for _ in range(len(train_datagen))])
 ########################
+'''
 
-resnet5.compile(optimizer = tf.keras.optimizers.Adam(0.01),
+Sequential.compile(optimizer = tf.keras.optimizers.Adam(0.01),
              loss = 'categorical_crossentropy',
              metrics = [tf.keras.metrics.CategoricalAccuracy()])
 
 num_epochs = 10
 batch_size = 16
 
-print(len(validation_generator), 11807/batch_size)
+print(len(validation_generator))
 
-hist = resnet5.fit(train_generator, train_generator, batch_size = batch_size, shuffle = True, epochs = num_epochs)
+hist = Sequential.fit(train_generator, train_generator, batch_size = batch_size, shuffle = True, epochs = num_epochs)
 
-resnet5.fit_generator(
+Sequential.fit_generator(
         train_generator,
         steps_per_epoch = len(train_generator),
         epochs = num_epochs,
         validation_data = validation_generator,
         validation_steps = len(validation_generator)
 )
+
+print("-- Evaluate --")
+scores = resnet5.evaluate_generator(validation_generator, steps=5)
+print("%s: %.2f%%" %(resnet5.metrics_names[1], scores[1]*100))
+
+# 1~16 Label 확인
+'''
+plt.figure(figsize=(10, 10))
+
+for c in range(9):
+    plt.subplot(3, 3, c + 1)
+    #plt.title("{} original".format())
+    #plt.imshow(shortcut[c].reshape(24, 24, 3), cmap='gray')
+
+
+plt.show()
+
+plt.figure(figsize=(10, 10))
+for c in range(9):
+    plt.subplot(3, 3, c + 1)
+    #plt.title("{} reconstructed".format(ho_list[c]))
+    #x = prediction[c].reshape(24, 24, 3)
+    plt.imshow(x, cmap='hot')
+
+'''
